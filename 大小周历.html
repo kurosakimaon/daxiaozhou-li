@@ -168,8 +168,9 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
 .frm{display:flex;flex-direction:column;gap:7px}
 .frm label{font-size:13px;letter-spacing:.2em;color:var(--ink-soft)}
 .frm .hint{font-size:12px;color:var(--ink-faint);letter-spacing:.04em}
-.frm input[type=date],.frm input[type=number],.frm select,.frm textarea{font-family:inherit;font-size:14px;color:var(--ink);background:var(--sheet-hi);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none;transition:border-color .2s}
+.frm input[type=date],.frm input[type=number],.frm input[type=password],.frm select,.frm textarea{font-family:inherit;font-size:14px;color:var(--ink);background:var(--sheet-hi);border:1px solid var(--line);border-radius:9px;padding:9px 12px;outline:none;transition:border-color .2s}
 .frm input:focus,.frm select:focus,.frm textarea:focus{border-color:var(--red)}
+.frm input:disabled,.frm select:disabled,.frm textarea:disabled{opacity:.55;cursor:not-allowed;background:#f2ebda}
 .frm textarea{min-height:96px;resize:vertical;line-height:1.7}
 .frm input[type=number]{width:120px}
 .opts{display:flex;gap:18px;flex-wrap:wrap}
@@ -178,6 +179,17 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
 .settings-foot{grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding-top:4px}
 .settings-foot .note{font-size:12px;color:var(--ink-faint)}
 .coverage{grid-column:1/-1;font-size:12px;color:var(--ink-soft);border-top:1px dashed var(--line);padding-top:12px;letter-spacing:.06em}
+
+/* ---------- 权限 / 登录 ---------- */
+.auth{display:flex;align-items:center;gap:9px;padding-bottom:6px}
+.auth .who{font-size:12px;letter-spacing:.16em;color:var(--ink-soft)}
+.auth .chip{appearance:none;font-family:inherit;border:1.5px solid var(--line);background:var(--sheet-hi);color:var(--ink-soft);font-size:12px;letter-spacing:.16em;padding:6px 13px;border-radius:999px;cursor:pointer;transition:border-color .2s,color .2s}
+.auth .chip:hover{border-color:var(--red);color:var(--red)}
+.auth .chip.on{border-color:var(--ok);color:var(--ok)}
+.auth .chip.on:hover{border-color:var(--red);color:var(--red)}
+.readonly-bar{grid-column:1/-1;display:none;align-items:center;gap:12px;background:var(--red-wash);border:1px solid #eccfc7;color:#8a3225;border-radius:10px;padding:11px 15px;font-size:13px;letter-spacing:.04em}
+.readonly-bar.on{display:flex}
+.readonly-bar .sp{flex:1}
 
 /* ---------- 弹层 / 提示 ---------- */
 .modal{position:fixed;inset:0;display:none;place-items:center;z-index:50;background:rgba(42,37,29,.45);backdrop-filter:blur(2px)}
@@ -233,6 +245,7 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
     <button data-tab="settings">设置</button>
     <i class="ink-bar"></i>
   </nav>
+  <div class="auth" id="authbox"></div>
 </header>
 
 <main>
@@ -320,6 +333,11 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
   <!-- 设置 -->
   <section class="view" id="view-settings">
     <div class="sheet settings">
+      <div class="readonly-bar" id="ro-bar">
+        <span>只读模式：排班数据由管理员统一维护，你可以查看日历、统计并导出 CSV。</span>
+        <span class="sp"></span>
+        <button class="btn" id="ro-login">管理员登录</button>
+      </div>
       <div class="frm">
         <label>起始周一（第一个大周的周一）</label>
         <input type="date" id="c-start">
@@ -358,7 +376,7 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
       <div class="settings-foot">
         <button class="btn solid" id="c-save">保存</button>
         <button class="btn" id="c-reset">恢复默认</button>
-        <span class="note">日常数据自动存本机浏览器（localStorage），无需联网。</span>
+        <span class="note" id="c-note">日常数据自动存本机浏览器（localStorage），无需联网。</span>
       </div>
       <div class="settings-foot" style="border-top:1px dashed var(--line);padding-top:14px">
         <button class="btn" id="c-bind">绑定备份文件</button>
@@ -392,10 +410,34 @@ table.stat tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weig
 </div>
 <div id="toast"></div>
 
+<!-- 管理员登录 -->
+<div class="modal" id="login">
+  <div class="card">
+    <button class="x" id="login-x">×</button>
+    <div style="font-size:19px;font-weight:900;letter-spacing:.2em;margin-bottom:6px">管理员登录</div>
+    <div style="font-size:12px;color:var(--ink-soft);letter-spacing:.04em;line-height:1.7;margin-bottom:16px">登录后可编辑排班配置与例外日；未登录的同事只能查看。</div>
+    <div class="frm">
+      <label>管理员密码</label>
+      <input type="password" id="login-pw" autocomplete="current-password" placeholder="请输入管理员密码">
+    </div>
+    <div class="mact">
+      <button class="btn solid" id="login-go">登录</button>
+      <button class="btn ghost" id="login-cancel">取消</button>
+    </div>
+    <div id="login-err" style="font-size:12px;color:var(--red);margin-top:10px;min-height:16px;letter-spacing:.04em"></div>
+  </div>
+</div>
+
 <script>
 "use strict";
 /* ================= 配置 ================= */
 const LS="daxz.v1";
+const TK="daxz.token";
+/* 运行模式：先探测局域网服务器（/api/config）；探测不到则退回本机单机模式 */
+let MODE="local";          // "server" 局域网服务模式 | "local" 本机单机模式
+let IS_ADMIN=false;        // 局域网模式下是否拥有编辑权限
+let adminToken=localStorage.getItem(TK)||"";
+let serverMT=0;            // 服务器数据版本号，用于自动同步
 function defaultCfg(){
   return {startMonday:iso(mondayOf(new Date())),mode:"odd",sat:true,sun:false,onlyBig:true,hours:8,ov:"",extraHol:""};
 }
@@ -419,11 +461,29 @@ function loadCfg(){
 }
 let cfg=loadCfg();
 let firstRun=!localStorage.getItem(LS);
+/* 保存：本机模式写 localStorage 与备份文件；局域网模式推送到服务器（需管理员权限） */
 function saveCfg(){
   localStorage.setItem(LS,JSON.stringify(cfg));
   localStorage.setItem(LS+".mtime",String(Date.now()));
-  writeBak();
+  if(MODE!=="server"){ writeBak(); return Promise.resolve(true); }
+  return fetch("api/config",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Admin-Token":adminToken},
+      body:JSON.stringify({cfg:cfg})
+    })
+    .then(function(r){
+      if(r.status===401){IS_ADMIN=false;applyAuthUI();toast("登录已过期，请重新登录管理员");return false;}
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(d){
+      if(d===false)return false;
+      serverMT=d.mtime||0;return true;
+    })
+    .catch(function(e){toast("保存失败："+(e&&e.message||e));return false;});
 }
+/* 当前是否具备编辑权限（本机模式始终可编辑） */
+function canEdit(){return MODE!=="local"?IS_ADMIN:true;}
 
 /* ================= 国家法定假期（按《全国年节及纪念日放假办法》推算） =================
    只标办法规定的法定日本身：元旦 1 天；春节 除夕+初一至初三（2025 年起，此前为初一至初三）；
@@ -737,6 +797,7 @@ function renderStats(){
 /* ================= 视图：设置 ================= */
 function updateBakUI(){
   if(!el("c-bk"))return;
+  if(MODE==="server"){el("c-bk").textContent="";return;}
   const bound=!!bakHandle;
   el("c-sync").style.display=bound?"":"none";
   el("c-unbind").style.display=bound?"":"none";
@@ -779,8 +840,124 @@ function applySettings(){
   cfg.hours=Math.min(16,Math.max(1,+el("c-hours").value||8));
   cfg.ov=el("c-ov").value.trim();
   cfg.extraHol=el("c-hol").value;
-  rebuild();saveCfg();renderAll();
-  toast("已保存");
+  rebuild();renderAll();renderSettings();
+  saveCfg().then(function(ok){if(ok)toast("已保存");});
+}
+
+/* ================= 局域网权限：只读 / 管理员登录 ================= */
+function applyAuthUI(){
+  const ro=MODE==="server"&&!IS_ADMIN;
+  const box=el("authbox");
+  if(MODE!=="server"){
+    box.innerHTML="";
+  }else if(IS_ADMIN){
+    box.innerHTML='<span class="who">管理员模式</span><button class="chip on" id="auth-out">退出</button>';
+    el("auth-out").addEventListener("click",doLogout);
+  }else{
+    box.innerHTML='<span class="who">只读浏览</span><button class="chip" id="auth-in">管理员登录</button>';
+    el("auth-in").addEventListener("click",openLogin);
+  }
+  el("ro-bar").classList.toggle("on",ro);
+  document.querySelectorAll("#view-settings input, #view-settings textarea, #view-settings select").forEach(function(i){i.disabled=ro;});
+  el("c-save").style.display=ro?"none":"";
+  el("c-reset").style.display=ro?"none":"";
+  el("c-imp").style.display=ro?"none":"";
+  el("c-note").textContent=MODE==="server"
+    ?"排班数据保存在局域网服务器上，改动会即时同步给所有正在查看的同事。"
+    :"日常数据自动存本机浏览器（localStorage），无需联网。";
+  if(MODE==="server"){
+    el("c-bind").style.display="none";
+    el("c-sync").style.display="none";
+    el("c-unbind").style.display="none";
+    el("c-bk").textContent="";
+    el("c-bkhint").textContent="本页数据由服务器统一保存：同事打开同一网址即可查看最新排班，无需登录；只有管理员登录后才能修改配置与例外日。若要迁移或留档，可用「导出备份 JSON」。";
+  }else{
+    updateBakUI();
+  }
+}
+function openLogin(){
+  el("login-err").textContent="";
+  el("login-pw").value="";
+  el("login").classList.add("on");
+  setTimeout(function(){try{el("login-pw").focus();}catch(e){}},60);
+}
+function closeLogin(){el("login").classList.remove("on");}
+function doLogin(){
+  const pw=el("login-pw").value;
+  el("login-err").textContent="";
+  fetch("api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:pw})})
+    .then(function(r){
+      if(r.ok)return r.json();
+      if(r.status===401)throw new Error("密码不正确");
+      throw new Error("登录失败（HTTP "+r.status+"）");
+    })
+    .then(function(d){
+      adminToken=d.token;localStorage.setItem(TK,adminToken);IS_ADMIN=true;
+      closeLogin();applyAuthUI();renderSettings();
+      if(el("modal").classList.contains("on")&&el("modal")._key)openDay(el("modal")._key);
+      toast("已进入管理员模式，可以修改排班");
+    })
+    .catch(function(e){el("login-err").textContent=e.message||String(e);});
+}
+function doLogout(){
+  fetch("api/logout",{method:"POST",headers:{"X-Admin-Token":adminToken}}).catch(function(){});
+  adminToken="";localStorage.removeItem(TK);IS_ADMIN=false;
+  applyAuthUI();renderSettings();
+  if(el("modal").classList.contains("on")&&el("modal")._key)openDay(el("modal")._key);
+  toast("已退出管理员模式，恢复只读");
+}
+/* 轮询服务器：其他同事改动后自动同步到本页；管理员会话过期也会自动回落只读 */
+function startPoll(){
+  if(MODE!=="server")return;
+  setInterval(function(){
+    if(document.hidden)return;
+    fetch("api/config",{cache:"no-store",headers:{"X-Admin-Token":adminToken}})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d)return;
+        if(!!d.admin!==IS_ADMIN){
+          IS_ADMIN=!!d.admin;adminToken=IS_ADMIN?adminToken:"";if(!IS_ADMIN)localStorage.removeItem(TK);
+          applyAuthUI();renderSettings();
+          if(IS_ADMIN)toast("登录状态已更新");else toast("管理员登录已过期，恢复只读");
+        }
+        if(d.mtime===serverMT)return;
+        serverMT=d.mtime;cfg=sanitizeCfg(d.cfg);rebuild();renderAll();
+        const ae=document.activeElement, editing=ae&&ae.closest&&ae.closest("#view-settings");
+        if(!editing&&el("view-settings").classList.contains("on"))renderSettings();
+        if(el("modal").classList.contains("on")&&el("modal")._key)openDay(el("modal")._key);
+        toast("排班已同步到最新");
+      }).catch(function(){});
+  },5000);
+}
+/* 启动：探测服务端 → 加载配置 → 渲染 */
+function boot(){
+  fetch("api/config",{cache:"no-store"})
+    .then(function(r){return r.ok?r.json():null;})
+    .catch(function(){return null;})
+    .then(function(d){
+      if(d&&d.cfg){
+        MODE="server";
+        cfg=sanitizeCfg(d.cfg);
+        serverMT=d.mtime||0;
+        firstRun=false;
+        if(adminToken){
+          return fetch("api/session",{headers:{"X-Admin-Token":adminToken}})
+            .then(function(r){return r.json();})
+            .then(function(s){IS_ADMIN=!!(s&&s.admin);})
+            .catch(function(){});
+        }
+      }else{
+        MODE="local";
+        cfg=loadCfg();
+        firstRun=!localStorage.getItem(LS);
+      }
+    })
+    .then(function(){
+      rebuild();applyAuthUI();renderAll();
+      if(el("view-settings").classList.contains("on"))renderSettings();
+      moveBar();startPoll();
+      if(firstRun)setTimeout(function(){toast("首次使用：已按本周一初始化，请在「设置」中核对起始周一");},600);
+    });
 }
 
 /* ================= 备份：文件绑定 / 导出 / 导入 ================= */
@@ -887,16 +1064,21 @@ function openDay(key){
   el("md-cyc").textContent=cycleLabel(st)+"（本周"+(st.big?"大周，周六上班":"小周，双休")+(OV[key]?"，例外不影响轮转":"")+"）";
   el("md-hours").textContent=st.work?st.hours+" 小时":"—";
   let acts="";
-  if(OV[key]) acts+='<button class="btn ghost" id="md-clear">取消例外（按大小周）</button>';
+  if(!canEdit()){
+    acts='<span style="font-size:12px;color:var(--ink-faint);letter-spacing:.06em">只读模式 · 需管理员登录后修改</span>';
+    if(MODE==="server")acts+='<button class="btn ghost" id="md-login">管理员登录</button>';
+  }else if(OV[key]) acts+='<button class="btn ghost" id="md-clear">取消例外（按大小周）</button>';
   else{
     if(!st.work) acts+='<button class="btn" id="md-w">改为上班 / 加班</button>';
     else acts+='<button class="btn ghost" id="md-r">改为休息</button>';
   }
   el("md-acts").innerHTML=acts;
-  const bw=el("md-w"),br=el("md-r"),bc=el("md-clear");
+  const bw=el("md-w"),br=el("md-r"),bc=el("md-clear"),bl=el("md-login");
   if(bw)bw.addEventListener("click",function(){setOv(key,true);});
   if(br)br.addEventListener("click",function(){setOv(key,false);});
   if(bc)bc.addEventListener("click",function(){clearOv(key);});
+  if(bl)bl.addEventListener("click",openLogin);
+  el("modal")._key=key;
   el("modal").classList.add("on");
 }
 function ovToText(map){
@@ -905,19 +1087,21 @@ function ovToText(map){
   }).join("\n");
 }
 function setOv(key,work){
+  if(!canEdit()){toast("只读模式，需管理员登录后修改");return;}
   ensureHol(parseISO(key).getFullYear());
   if(work&&HOL[key]&&!confirm(key+" 是"+(HOLEX[key]?"额外假期":"国家法定假期")+"「"+HOL[key]+"」，确定手动改为上班吗？"))return;
   const reason=prompt(work?"改为上班：填写原因（可留空）":"改为休息：填写原因（可留空）","");
   if(reason===null)return;
   OV[key]={work:work,reason:reason.trim()};
-  cfg.ov=ovToText(OV);saveCfg();
-  toast((work?"已改为上班 ":"已改为休息 ")+(reason.trim()?"· "+reason.trim():"")+"，周期轮转不变");
+  cfg.ov=ovToText(OV);
+  saveCfg().then(function(ok){if(ok)toast((work?"已改为上班 ":"已改为休息 ")+(reason.trim()?"· "+reason.trim():"")+"，周期轮转不变");});
   renderAll();if(el("view-settings").classList.contains("on"))renderSettings();
   openDay(key);
 }
 function clearOv(key){
-  delete OV[key];cfg.ov=ovToText(OV);saveCfg();
-  toast("已取消例外，按大小周排班");
+  if(!canEdit()){toast("只读模式，需管理员登录后修改");return;}
+  delete OV[key];cfg.ov=ovToText(OV);
+  saveCfg().then(function(ok){if(ok)toast("已取消例外，按大小周排班");});
   renderAll();if(el("view-settings").classList.contains("on"))renderSettings();
   openDay(key);
 }
@@ -958,11 +1142,20 @@ el("m-today").addEventListener("click",function(){const n=new Date();curY=n.getF
 el("m-csv").addEventListener("click",exportCsv);
 el("c-save").addEventListener("click",applySettings);
 el("c-reset").addEventListener("click",function(){
-  cfg=defaultCfg();rebuild();saveCfg();renderAll();renderSettings();toast("已恢复默认（本周一为起始）");
+  if(!canEdit()){toast("只读模式，无修改权限");return;}
+  if(!confirm("确定恢复默认排班配置（本周一为起始）吗？"))return;
+  cfg=defaultCfg();rebuild();renderAll();renderSettings();
+  saveCfg().then(function(ok){if(ok)toast("已恢复默认（本周一为起始）");});
 });
 el("modal-x").addEventListener("click",function(){el("modal").classList.remove("on");});
 el("modal").addEventListener("click",function(e){if(e.target===el("modal"))el("modal").classList.remove("on");});
-document.addEventListener("keydown",function(e){if(e.key==="Escape")el("modal").classList.remove("on");});
+el("ro-login").addEventListener("click",openLogin);
+el("login-x").addEventListener("click",closeLogin);
+el("login-cancel").addEventListener("click",closeLogin);
+el("login-go").addEventListener("click",doLogin);
+el("login-pw").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+el("login").addEventListener("click",function(e){if(e.target===el("login"))closeLogin();});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){el("modal").classList.remove("on");el("login").classList.remove("on");}});
 window.addEventListener("resize",moveBar);
 
 /* 年份下拉：覆盖 2024 到当前年 +5 */
@@ -975,8 +1168,7 @@ window.addEventListener("resize",moveBar);
   el("s-year").addEventListener("change",renderStats);
 })();
 
-renderAll();moveBar();
-/* 备份区初始化 */
+/* 备份区初始化（仅本机模式使用，局域网模式下相关按钮会被隐藏） */
 (function(){
   el("c-bind").addEventListener("click",function(){
     window.showSaveFilePicker({suggestedName:"大小周备份.json",
@@ -1003,13 +1195,14 @@ renderAll();moveBar();
   el("c-imp").addEventListener("click",function(){el("c-impf").click();});
   el("c-impf").addEventListener("change",function(e){
     const f=e.target.files[0]; if(!f)return;
+    if(!canEdit()){toast("只读模式，需管理员登录后导入");e.target.value="";return;}
     f.text().then(function(t){
       const data=JSON.parse(t);
       if(!validCfg(data.cfg))throw new Error("文件结构不是本程序的备份");
       const newer=data.savedAt>(+(localStorage.getItem(LS+".mtime")||0));
       if(!confirm("备份时间："+(data.savedAt?fmtTime(data.savedAt):"未知")+(newer?"（比本机新）":"")+"\n确定用它覆盖当前配置吗？"))return;
-      cfg=sanitizeCfg(data.cfg);rebuild();saveCfg();renderAll();renderSettings();
-      toast("已导入备份并恢复");
+      cfg=sanitizeCfg(data.cfg);rebuild();renderAll();renderSettings();
+      saveCfg().then(function(ok){if(ok)toast("已导入备份并恢复");});
     }).catch(function(err){toast("导入失败："+(err.message||err));})
       .then(function(){e.target.value="";});
   });
@@ -1021,7 +1214,9 @@ renderAll();moveBar();
     return h.queryPermission({mode:"readwrite"});
   }).then(function(p){if(p==="granted")updateBakUI();}).catch(function(){});
 })();
-if(firstRun)setTimeout(function(){toast("首次使用：已按本周一初始化，请在「设置」中核对起始周一");},600);
+
+/* 启动：优先连接局域网服务器，失败则本机模式 */
+boot();
 </script>
 </body>
 </html>
